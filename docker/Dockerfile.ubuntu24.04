@@ -31,6 +31,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -fsSL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /usr/local/bin eksctl
 
 # flux
-RUN curl -s https://fluxcd.io/install.sh | bash
+#RUN curl -s https://fluxcd.io/install.sh | bash
 
 CMD ["/bin/bash"]

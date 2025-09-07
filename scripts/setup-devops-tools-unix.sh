@@ -11,6 +11,7 @@ WITH_CURSOR=false
 WITH_CLAUDE=false
 WITH_PODMAN=false
 WITH_RANCHER=false
+WITH_FLUX=false       # NEW: off by default
 DO_GH=false
 DO_GLAB=false
 DO_SSH=false
@@ -23,7 +24,7 @@ Usage: $0 [options]
   --kubectl vX.Y.Z              Pin kubectl
   --helm vX.Y.Z                 Pin helm
   --terraform X.Y.Z             Pin terraform
-  --flux vX.Y.Z                 Pin flux
+  --flux vX.Y.Z                 Pin flux (also turns on --flux)
   --eksctl vX.Y.Z               Pin eksctl
   --minimal                     Minimal footprint (skip az/gcloud/aws and extras)
   --docker                      Install Docker engine (Colima on macOS, Docker CE on Linux)
@@ -37,6 +38,7 @@ Usage: $0 [options]
   --glab                        Run glab auth login --hostname gitlab.com -w
   --ssh                         Generate ed25519 key, add to agent, write ~/.ssh/config
   --completions                 Add shell completions (bash/zsh; fish if found)
+  --flux                        Install Flux CLI (disabled by default)
 EOF
 }
 
@@ -46,7 +48,9 @@ while [[ $# -gt 0 ]]; do
     --kubectl) KUBECTL_VER="$2"; shift 2;;
     --helm) HELM_VER="$2"; shift 2;;
     --terraform) TERRAFORM_VER="$2"; shift 2;;
-    --flux) FLUX_VER="$2"; shift 2;;
+    --flux)
+      if [[ $# -gt 1 && "$2" =~ ^v?[0-9] ]]; then FLUX_VER="$2"; shift 2; else WITH_FLUX=true; shift; fi
+      ;;
     --eksctl) EKSCTL_VER="$2"; shift 2;;
     --minimal) MINIMAL=true; shift;;
     --docker) WITH_DOCKER=true; shift;;
@@ -108,8 +112,11 @@ mac_setup(){
   else brew install terraform || true; fi
 
   if $PIN && [[ -n "$FLUX_VER" ]]; then
+    WITH_FLUX=true
     curl -fsSL "https://github.com/fluxcd/flux2/releases/download/${FLUX_VER}/flux_${FLUX_VER}_darwin_${A}.tar.gz" | sudo tar xz -C /usr/local/bin flux
-  else brew install fluxcd/tap/flux || true; fi
+  elif $WITH_FLUX; then
+    brew install fluxcd/tap/flux || true
+  fi
 
   if $PIN && [[ -n "$EKSCTL_VER" ]]; then
     curl -fsSL "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VER}/eksctl_Darwin_${A}.tar.gz" | sudo tar xz -C /usr/local/bin eksctl
@@ -156,14 +163,18 @@ ubuntu_setup(){
     [[ -n "$KUBECTL_VER" ]]  && sudo curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/${A}/kubectl" && sudo chmod +x /usr/local/bin/kubectl
     [[ -n "$HELM_VER" ]]     && curl -fsSL "https://get.helm.sh/helm-${HELM_VER}-linux-${A}.tar.gz" | sudo tar xz -C /usr/local/bin --strip-components=1 linux-${A}/helm
     [[ -n "$TERRAFORM_VER" ]]&& curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VER}/terraform_${TERRAFORM_VER}_linux_${A}.zip" -o /tmp/tf.zip && sudo unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip
-    [[ -n "$FLUX_VER" ]]     && curl -fsSL "https://github.com/fluxcd/flux2/releases/download/${FLUX_VER}/flux_${FLUX_VER}_linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin flux
-  else
+  fi
+  # flux
+  if [[ -n "$FLUX_VER" ]]; then
+    WITH_FLUX=true
+    curl -fsSL "https://github.com/fluxcd/flux2/releases/download/${FLUX_VER}/flux_${FLUX_VER}_linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin flux
+  elif $WITH_FLUX; then
     curl -s https://fluxcd.io/install.sh | sudo bash
   fi
 
   # eksctl
   if [[ -n "$EKSCTL_VER" ]]; then
-    curl -fsSL "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VER}/eksctl_Linux_${A}.tar.gz" | sudo tar xz -C /usrocal/bin eksctl
+    curl -fsSL "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VER}/eksctl_Linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin eksctl
   else
     curl -fsSL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin eksctl
   fi
@@ -272,9 +283,10 @@ EOF
   fi
 
   # flux
-  if $PIN && [[ -n "$FLUX_VER" ]]; then
+  if [[ -n "$FLUX_VER" ]]; then
+    WITH_FLUX=true
     curl -fsSL "https://github.com/fluxcd/flux2/releases/download/${FLUX_VER}/flux_${FLUX_VER}_linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin flux
-  else
+  elif $WITH_FLUX; then
     curl -s https://fluxcd.io/install.sh | sudo bash
   fi
 
@@ -323,7 +335,7 @@ EOF
 
 # ---- Git config, gitignore, SSH, VS Code tuning, SSO, Completions ----
 git_setup(){
-  if ! need git; then warn "git not installed?"; return; }
+  if ! need git; then warn "git not installed?"; return; fi
   read -r -p "Git user.name: " NAME || true
   read -r -p "Git user.email: " EMAIL || true
   [[ -n "${NAME:-}"  ]] && git config --global user.name "$NAME"

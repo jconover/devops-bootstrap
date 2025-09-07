@@ -1,35 +1,39 @@
 SHELL := /bin/bash
 
-.PHONY: help unix unix-desktop unix-minimal windows-help docker-fedora docker-ubuntu
+.PHONY: help unix unix-with-flux unix-minimal windows-help windows-with-flux docker-fedora docker-ubuntu
 
 help:
 	@echo "Targets:"
-	@echo "  make unix          - macOS/Ubuntu25.04/Fedora42 with VSCode + completions"
-	@echo "  make unix-desktop  - macOS/Ubuntu25.04/Fedora42 with Docker+Podman+Rancher+VSCode+completions"
-	@echo "  make unix-minimal  - macOS/Ubuntu25.04/Fedora42 minimal stack + completions"
-	@echo "  make windows-help  - Show Windows usage examples"
-	@echo "  make docker-fedora - Build Fedora 42 devops-tools image"
-	@echo "  make docker-ubuntu - Build Ubuntu 24.04 devops-tools image"
+	@echo "  make unix              - macOS/Ubuntu25.04/Fedora42 install (no Flux)"
+	@echo "  make unix-with-flux    - macOS/Ubuntu25.04/Fedora42 install (Flux enabled)"
+	@echo "  make unix-minimal      - Minimal stack (no cloud CLIs, no extras)"
+	@echo "  make windows-help      - Show Windows usage"
+	@echo "  make windows-with-flux - Windows example with Flux enabled"
+	@echo "  make docker-fedora     - Build Fedora 42 devops-tools image"
+	@echo "  make docker-ubuntu     - Build Ubuntu 24.04 devops-tools image"
 
 unix:
 	chmod +x scripts/setup-devops-tools-unix.sh
 	./scripts/setup-devops-tools-unix.sh --vscode --completions
 
-unix-desktop:
+unix-with-flux:
 	chmod +x scripts/setup-devops-tools-unix.sh
-	./scripts/setup-devops-tools-unix.sh --docker --podman --rancher --vscode --completions
+	./scripts/setup-devops-tools-unix.sh --vscode --completions --flux
 
 unix-minimal:
 	chmod +x scripts/setup-devops-tools-unix.sh
 	./scripts/setup-devops-tools-unix.sh --minimal --completions
 
 windows-help:
-	@echo "Run PowerShell as Administrator, then for a full desktop:"
+	@echo "Run PowerShell as Administrator, then:"
 	@echo "  Set-ExecutionPolicy -Scope Process Bypass -Force"
-	@echo "  .\\scripts\\setup-devops-tools.ps1 -IncludeVSCode -IncludePodman -IncludeRancherDesktop -InstallCompletions -ConfigureSsh -ConfigureGh -ConfigureGlab"
-	@echo ""
-	@echo "Pin versions example:"
-	@echo "  .\\scripts\\setup-devops-tools.ps1 -PinVersions -KubectlVersion v1.30.4 -HelmVersion v3.15.3 -TerraformVersion 1.9.5 -FluxVersion v2.3.0 -EksctlVersion v0.181.0 -IncludeVSCode -InstallCompletions"
+	@echo "  .\\scripts\\setup-devops-tools.ps1 -IncludeVSCode -InstallCompletions"
+	@echo "  # Add -IncludeFlux to enable Flux"
+
+windows-with-flux:
+	@echo "Run PowerShell as Administrator, then:"
+	@echo "  Set-ExecutionPolicy -Scope Process Bypass -Force"
+	@echo "  .\\scripts\\setup-devops-tools.ps1 -IncludeVSCode -InstallCompletions -IncludeFlux"
 
 docker-fedora:
 	docker build -f docker/Dockerfile.fedora42 -t devops-tools:fedora42 .

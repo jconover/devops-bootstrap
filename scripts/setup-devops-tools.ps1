@@ -9,6 +9,7 @@ param(
   [switch]$IncludeGkeAuth,
   [switch]$IncludePodman,
   [switch]$IncludeRancherDesktop,
+  [switch]$IncludeFlux,        # NEW: off by default
 
   # Modes
   [switch]$Upgrade,
@@ -28,7 +29,7 @@ param(
   [string]$KubectlVersion,
   [string]$HelmVersion,
   [string]$TerraformVersion,
-  #[string]$FluxVersion,
+  [string]$FluxVersion,
   [string]$EksctlVersion
 )
 
@@ -88,14 +89,16 @@ function Install-File([string]$Url, [string]$TargetName, [string]$Display) {
   Ok "$Display installed to $dst"
 }
 
-# Decide pinned vs winget for pinnable tools
+# Build pinnable list (conditionally include Flux)
 $CORE_PINNABLE = @(
   @{ Name="kubectl";  WingetId="Kubernetes.kubectl";  Pin=$PinVersions -or ($KubectlVersion);  Version=$KubectlVersion },
   @{ Name="helm";     WingetId="Helm.Helm";           Pin=$PinVersions -or ($HelmVersion);     Version=$HelmVersion },
   @{ Name="terraform";WingetId="Hashicorp.Terraform"; Pin=$PinVersions -or ($TerraformVersion);Version=$TerraformVersion },
-  #@{ Name="flux";     WingetId="fluxcd.flux";         Pin=$PinVersions -or ($FluxVersion);     Version=$FluxVersion },
   @{ Name="eksctl";   WingetId="eksctl.eksctl";       Pin=$PinVersions -or ($EksctlVersion);   Version=$EksctlVersion }
 )
+if ($IncludeFlux -or $FluxVersion -or $PinVersions) {
+  $CORE_PINNABLE += @{ Name="flux"; WingetId="fluxcd.flux"; Pin=$PinVersions -or ($FluxVersion); Version=$FluxVersion }
+}
 
 # Always via WinGet (unless Minimal removes some)
 $PACKAGES_CORE_WINGET = @(
@@ -135,17 +138,18 @@ if ($Upgrade) {
   Ok "Upgrade complete (re-pin binaries by re-running with -PinVersions)."; exit 0
 }
 
-# Install pinnable
+# Install pinnable (or via WinGet fallback)
 foreach ($c in $CORE_PINNABLE) {
   if ($c.Pin) {
     switch ($c.Name) {
       "kubectl"  { $v=$c.Version; if (-not $v){$v="v1.30.4"}; Install-File "https://dl.k8s.io/release/$v/bin/windows/amd64/kubectl.exe" "kubectl.exe" "kubectl $v" }
       "helm"     { $v=$c.Version; if (-not $v){$v="v3.15.3"}; Install-ZipBinary "https://get.helm.sh/helm-$v-windows-amd64.zip" "helm.exe" "Helm $v" }
       "terraform"{ $v=$c.Version; if (-not $v){$v="1.9.5"};  Install-ZipBinary "https://releases.hashicorp.com/terraform/$v/terraform_${v}_windows_amd64.zip" "terraform.exe" "Terraform $v" }
-      #"flux"     { $v=$c.Version; if (-not $v){$v="v2.3.0"}; Install-ZipBinary "https://github.com/fluxcd/flux2/releases/download/$v/flux_${v}_windows_amd64.zip" "flux.exe" "Flux $v" }
+      "flux"     { $v=$c.Version; if (-not $v){$v="v2.3.0"}; Install-ZipBinary "https://github.com/fluxcd/flux2/releases/download/$v/flux_${v}_windows_amd64.zip" "flux.exe" "Flux $v" }
       "eksctl"   { $v=$c.Version; if (-not $v){$v="v0.181.0"};Install-ZipBinary "https://github.com/eksctl-io/eksctl/releases/download/$v/eksctl_Windows_amd64.zip" "eksctl.exe" "eksctl $v" }
     }
   } else {
+    # If flux is not requested, we won't have a flux entry in $CORE_PINNABLE
     Install-WinGet $c.WingetId $c.Name
   }
 }
@@ -265,7 +269,7 @@ if (Get-Command podman -ErrorAction SilentlyContinue)  { podman completion power
   Ok "PowerShell completions added. Restart your shell."
 }
 
-# Verify
+# Verify (best-effort)
 Write-Host ""
 foreach ($cmd in @(
   "kubectl.exe version --client --short","eksctl.exe version","terraform.exe -version | Select-Object -First 1",

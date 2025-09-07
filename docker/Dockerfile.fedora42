@@ -33,7 +33,7 @@ RUN curl -fsSL https://github.com/eksctl-io/eksctl/releases/latest/download/eksc
     tar xz -C /usr/local/bin eksctl
 
 # flux
-RUN curl -s https://fluxcd.io/install.sh | bash
+#RUN curl -s https://fluxcd.io/install.sh | bash
 
 # gcloud + GKE plugin
 RUN curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz -o /tmp/gcloud.tgz && \
