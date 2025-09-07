@@ -104,7 +104,7 @@ if ($IncludeFlux -or $FluxVersion -or $PinVersions) {
 $PACKAGES_CORE_WINGET = @(
   @{ Id="Git.Git";             Name="Git" },
   @{ Id="GitHub.cli";          Name="GitHub CLI" },
-  #@{ Id="GitLab.gitlab-cli";   Name="GitLab CLI" },
+  @{ Id="GitLab.gitlab-cli";   Name="GitLab CLI" },
   @{ Id="Python.Python.3.12";  Name="Python 3" }
 )
 if (-not $Minimal) {
@@ -260,7 +260,7 @@ if ($InstallCompletions) {
 if (Get-Command kubectl -ErrorAction SilentlyContinue) { kubectl completion powershell | Out-String | Invoke-Expression }
 if (Get-Command helm -ErrorAction SilentlyContinue)    { helm completion powershell    | Out-String | Invoke-Expression }
 if (Get-Command flux -ErrorAction SilentlyContinue)    { flux completion powershell    | Out-String | Invoke-Expression }
-if (Get-Command terraform -ErrorAction SilentlyContinue){ Register-ArgumentCompleter -Native -CommandName terraform -ScriptBlock { param($commandName,$wordToComplete,$cursorPosition) terraform -install-autocomplete | Out-Null } }
+if (Get-Command terraform -ErrorAction SilentlyContinue){ try { terraform -install-autocomplete | Out-Null } catch {} }
 if (Get-Command eksctl -ErrorAction SilentlyContinue)  { eksctl completion powershell  | Out-String | Invoke-Expression }
 if (Get-Command gh -ErrorAction SilentlyContinue)      { gh completion -s powershell   | Out-String | Invoke-Expression }
 if (Get-Command glab -ErrorAction SilentlyContinue)    { glab completion -s powershell | Out-String | Invoke-Expression }
