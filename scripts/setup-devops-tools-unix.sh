@@ -70,8 +70,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 log(){ printf "\n\033[1;36m[INFO]\033[0m %s\n" "$*"; }
-ok(){  printf "\033[1;32m[ OK ]\033[0m %s\n" "$*"; }
-warn(){printf "\033[1;33m[WARN]\033[0m %s\n" "$*"; }
+ok(){ printf "\033[1;32m[ OK ]\033[0m %s\n" "$*"; }
+warn(){ printf "\033[1;33m[WARN]\033[0m %s\n" "$*"; }
 err(){ printf "\033[1;31m[ERR ]\033[0m %s\n" "$*"; }
 
 OS="$(uname -s)"; ARCH="$(uname -m)"
@@ -148,20 +148,31 @@ ubuntu_setup(){
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
     sudo apt-get update -y && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   fi
-  # kubectl repo
-  sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | gpg --dearmor | sudo tee /etc/apt/keyrings/kubernetes-apt-keyring.gpg >/dev/null
-  echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list >/dev/null
-  # hashicorp
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/hashicorp.gpg >/dev/null
-  echo "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+  # kubectl repo - only add if not already present
+  if [[ ! -f /etc/apt/sources.list.d/kubernetes.list && ! -f /etc/apt/sources.list.d/kubernetes.sources ]]; then
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | gpg --dearmor | sudo tee /etc/apt/keyrings/kubernetes-apt-keyring.gpg >/dev/null
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list >/dev/null
+  fi
+  # hashicorp - only add if not already present
+  if [[ ! -f /etc/apt/sources.list.d/hashicorp.list && ! -f /etc/apt/sources.list.d/hashicorp.sources ]]; then
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/hashicorp.gpg >/dev/null
+    echo "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+  fi
   sudo apt-get update -y
 
-  sudo apt-get install -y kubectl helm terraform
-  # Pins override
+  sudo apt-get install -y kubectl terraform
+
+  # helm - install from official script since it's not in Ubuntu repos
+  if $PIN && [[ -n "$HELM_VER" ]]; then
+    curl -fsSL "https://get.helm.sh/helm-${HELM_VER}-linux-${A}.tar.gz" | sudo tar xz -C /usr/local/bin --strip-components=1 linux-${A}/helm
+  else
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  fi
+
+  # Pins override for kubectl and terraform
   if $PIN; then
     [[ -n "$KUBECTL_VER" ]]  && sudo curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/${A}/kubectl" && sudo chmod +x /usr/local/bin/kubectl
-    [[ -n "$HELM_VER" ]]     && curl -fsSL "https://get.helm.sh/helm-${HELM_VER}-linux-${A}.tar.gz" | sudo tar xz -C /usr/local/bin --strip-components=1 linux-${A}/helm
     [[ -n "$TERRAFORM_VER" ]]&& curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VER}/terraform_${TERRAFORM_VER}_linux_${A}.zip" -o /tmp/tf.zip && sudo unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip
   fi
   # flux
@@ -180,13 +191,20 @@ ubuntu_setup(){
   fi
 
   if ! $MINIMAL; then
-    # Azure, gcloud, AWS
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/microsoft.gpg >/dev/null
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ stable main" | sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
-    curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/cloud.google.gpg >/dev/null
-    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
-    sudo apt-get update -y && sudo apt-get install -y azure-cli google-cloud-sdk awscli
-    gcloud components install gke-gcloud-auth-plugin -q || true
+    log "Installing cloud CLI tools (Azure, GCP, AWS)"
+    # Azure CLI - only add repo if not already present
+    if [[ ! -f /etc/apt/sources.list.d/azure-cli.list && ! -f /etc/apt/sources.list.d/azure-cli.sources ]]; then
+      curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/microsoft.gpg >/dev/null
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ jammy main" | sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
+    fi
+    # Google Cloud SDK - only add repo if not already present
+    if [[ ! -f /etc/apt/sources.list.d/google-cloud-sdk.list && ! -f /etc/apt/sources.list.d/google-cloud-sdk.sources ]]; then
+      curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/cloud.google.gpg >/dev/null
+      echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list >/dev/null
+    fi
+    sudo apt-get update -y && sudo apt-get install -y azure-cli google-cloud-sdk google-cloud-cli-gke-gcloud-auth-plugin awscli
+  else
+    log "Skipping cloud CLI tools (minimal installation)"
   fi
 
   $WITH_K9S && sudo apt-get install -y k9s || true
