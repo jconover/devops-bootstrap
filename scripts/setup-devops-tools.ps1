@@ -10,6 +10,8 @@ param(
   [switch]$IncludePodman,
   [switch]$IncludeRancherDesktop,
   [switch]$IncludeFlux,        # NEW: off by default
+  [switch]$IncludeGitLabCli,
+  [switch]$IncludeCloudCLIs,   # Installs AWS, Azure, and Google Cloud CLIs
 
   # Modes
   [switch]$Upgrade,
@@ -104,10 +106,15 @@ if ($IncludeFlux -or $FluxVersion -or $PinVersions) {
 $PACKAGES_CORE_WINGET = @(
   @{ Id="Git.Git";             Name="Git" },
   @{ Id="GitHub.cli";          Name="GitHub CLI" },
-  @{ Id="GitLab.gitlab-cli";   Name="GitLab CLI" },
   @{ Id="Python.Python.3.12";  Name="Python 3" }
 )
-if (-not $Minimal) {
+if ($IncludeCloudCLIs) {
+  $PACKAGES_CORE_WINGET += @(
+    @{ Id="Microsoft.AzureCLI"; Name="Azure CLI" },
+    @{ Id="Google.CloudSDK";    Name="Google Cloud SDK" },
+    @{ Id="Amazon.AWSCLI";      Name="AWS CLI v2" }
+  )
+} elseif (-not $Minimal) {
   $PACKAGES_CORE_WINGET += @(
     @{ Id="Microsoft.AzureCLI"; Name="Azure CLI" },
     @{ Id="Google.CloudSDK";    Name="Google Cloud SDK" },
@@ -121,6 +128,7 @@ if ($IncludeK9s)            { $PACKAGES_OPTIONAL += @{ Id="Derailed.k9s";       
 if ($IncludeVSCode)         { $PACKAGES_OPTIONAL += @{ Id="Microsoft.VisualStudioCode"; Name="Visual Studio Code" } }
 if ($IncludeCursor)         { $PACKAGES_OPTIONAL += @{ Id="Cursor.Cursor";           Name="Cursor IDE" } }
 if ($IncludeClaude)         { $PACKAGES_OPTIONAL += @{ Id="Anthropic.Claude";        Name="Claude Desktop" } }
+if ($IncludeGitLabCli)      { $PACKAGES_OPTIONAL += @{ Id="GitLab.gitlab-cli";       Name="GitLab CLI" } }
 if ($IncludePodman)         { $PACKAGES_OPTIONAL += @{ Id="RedHat.Podman";           Name="Podman" } }
 if ($IncludeRancherDesktop) { $PACKAGES_OPTIONAL += @{ Id="SUSE.RancherDesktop";     Name="Rancher Desktop" } }
 
@@ -272,8 +280,8 @@ if (Get-Command podman -ErrorAction SilentlyContinue)  { podman completion power
 # Verify (best-effort)
 Write-Host ""
 foreach ($cmd in @(
-  "kubectl.exe version --client --short","eksctl.exe version","terraform.exe -version | Select-Object -First 1",
-  "helm.exe version --short","az version | Out-String | Select-String 'azure-cli'",
+  "kubectl.exe version --client","eksctl.exe version","terraform.exe -version | Select-Object -First 1",
+  "helm.exe version","az version | Out-String | Select-String 'azure-cli'",
   "gcloud version | Select-Object -First 2","aws --version","flux.exe version",
   "git --version","gh --version","glab --version","python --version",
   "podman --version"

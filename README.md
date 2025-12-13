@@ -4,8 +4,10 @@ Spin up a complete DevOps workstation on **Windows**, **macOS**, **Ubuntu 25.04*
 
 ## What’s included
 
-- CLIs: `kubectl`, `eksctl`, `terraform`, `helm`, `flux`* (optional), `aws`, `az`, `gcloud` (+ GKE auth plugin)
-- Dev: `git`, `gh` (GitHub CLI), `glab` (GitLab CLI), `python3`
+- CLIs: `kubectl`, `eksctl`, `terraform`, `helm`, `flux`* (optional)
+- Core dev tools: `git`, `gh` (GitHub CLI), `python3`
+- Optional cloud CLIs: `aws`, `az`, `gcloud` (+ GKE auth plugin) — installed by default, skip with `--minimal`
+- Optional: `glab` (GitLab CLI) — install with `-IncludeGitLabCli` / `--glab`
 - Containers (opt-in):
   - **Docker** (macOS via Colima, Linux via Docker CE, Windows via Docker Desktop)
   - **Podman** (engine/CLI)
@@ -29,7 +31,17 @@ Install latest of everything, VS Code, Podman, Rancher Desktop, completions, SSH
 Set-ExecutionPolicy -Scope Process Bypass -Force
 .\scripts\setup-devops-tools.ps1 `
   -IncludeVSCode -IncludePodman -IncludeRancherDesktop -InstallCompletions `
-  -ConfigureSsh -ConfigureGh -ConfigureGlab
+  -ConfigureSsh -ConfigureGh
+```
+
+**Include GitLab CLI**:
+```powershell
+.\scripts\setup-devops-tools.ps1 -IncludeGitLabCli -ConfigureGlab
+```
+
+**Minimal install with cloud CLIs only**:
+```powershell
+.\scripts\setup-devops-tools.ps1 -Minimal -IncludeCloudCLIs
 ```
 
 **Enable Flux**:
@@ -48,7 +60,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
   -IncludeVSCode -InstallCompletions -IncludeFlux
 ```
 
-**Minimal** footprint (skips az/gcloud/aws and optional apps unless explicitly requested):
+**Minimal** footprint (skips cloud CLIs and optional apps unless explicitly requested):
 ```powershell
 .\scripts\setup-devops-tools.ps1 -Minimal -InstallCompletions
 ```
@@ -60,7 +72,9 @@ Upgrade or uninstall:
 ```
 
 Common optional flags:
+- `-IncludeCloudCLIs` (AWS, Azure, GCP — or rely on default non-minimal install)
 - `-IncludeDockerDesktop`, `-IncludeK9s`, `-IncludeCursor`, `-IncludeClaude`, `-IncludePodman`, `-IncludeRancherDesktop`, `-IncludeFlux`
+- `-IncludeGitLabCli`
 - `-GitUserName "Your Name" -GitUserEmail "you@example.com"`
 - `-ConfigureSsh -ConfigureGh -ConfigureGlab`
 - `-InstallCompletions`
@@ -71,11 +85,21 @@ Common optional flags:
 
 > macOS uses Homebrew (+ Colima for Docker). Linux uses apt/dnf with official repos & fallbacks.
 
-Latest everything + Docker + Podman + Rancher Desktop + VS Code + completions + SSH + SSO (**no Flux** by default):
+Latest everything + Docker + Podman + Rancher Desktop + VS Code + completions + SSH (**no Flux** by default):
 ```bash
 chmod +x scripts/setup-devops-tools-unix.sh
 ./scripts/setup-devops-tools-unix.sh \
-  --docker --podman --rancher --vscode --completions --ssh --gh --glab
+  --docker --podman --rancher --vscode --completions --ssh --gh-auth
+```
+
+**Include GitLab CLI**:
+```bash
+./scripts/setup-devops-tools-unix.sh --glab --glab-auth
+```
+
+**Minimal install with cloud CLIs only**:
+```bash
+./scripts/setup-devops-tools-unix.sh --minimal --cloud-clis
 ```
 
 **Enable Flux**:
@@ -96,9 +120,11 @@ chmod +x scripts/setup-devops-tools-unix.sh
 ```
 
 Common optional flags:
+- `--cloud-clis` (AWS, Azure, GCP — or rely on default non-minimal install)
 - `--docker` (Colima on macOS; Docker CE on Linux)
 - `--podman`, `--rancher`, `--k9s`, `--vscode`, `--cursor` (macOS), `--claude` (macOS)
-- `--ssh`, `--gh`, `--glab`, `--completions`, `--flux`
+- `--glab` (install GitLab CLI)
+- `--ssh`, `--gh-auth`, `--glab-auth`, `--completions`, `--flux`
 - `--pin --kubectl vX --helm vY --terraform Z --flux vA --eksctl vB`
 
 ---
