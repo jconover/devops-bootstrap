@@ -12,8 +12,10 @@ WITH_CLAUDE=false
 WITH_PODMAN=false
 WITH_RANCHER=false
 WITH_FLUX=false       # NEW: off by default
+WITH_GLAB_CLI=false   # NEW: GitLab CLI off by default
+WITH_CLOUD_CLIS=false # NEW: AWS, Azure, GCP CLIs
 DO_GH=false
-DO_GLAB=false
+DO_GH_AUTH=false
 DO_SSH=false
 DO_COMPLETIONS=false
 
@@ -34,8 +36,11 @@ Usage: $0 [options]
   --k9s                         Install k9s
   --cursor                      Install Cursor (macOS only)
   --claude                      Install Claude (macOS only)
-  --gh                          Run gh auth login --web
-  --glab                        Run glab auth login --hostname gitlab.com -w
+  --gh                          Configure GitHub CLI auth
+  --glab                        Install GitLab CLI
+  --gh-auth                     Run gh auth login --web
+  --glab-auth                   Run glab auth login --hostname gitlab.com -w
+  --cloud-clis                  Install AWS, Azure, and Google Cloud CLIs
   --ssh                         Generate ed25519 key, add to agent, write ~/.ssh/config
   --completions                 Add shell completions (bash/zsh; fish if found)
   --flux                        Install Flux CLI (disabled by default)
@@ -61,7 +66,10 @@ while [[ $# -gt 0 ]]; do
     --cursor) WITH_CURSOR=true; shift;;
     --claude) WITH_CLAUDE=true; shift;;
     --gh) DO_GH=true; shift;;
-    --glab) DO_GLAB=true; shift;;
+    --gh-auth) DO_GH_AUTH=true; shift;;
+    --glab) WITH_GLAB_CLI=true; shift;;
+    --glab-auth) DO_GLAB=true; shift;;
+    --cloud-clis) WITH_CLOUD_CLIS=true; shift;;
     --ssh) DO_SSH=true; shift;;
     --completions) DO_COMPLETIONS=true; shift;;
     -h|--help) usage; exit 0;;
@@ -96,33 +104,13 @@ mac_setup(){
     fi
     export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
   fi
-  brew install git gh glab python jq wget curl unzip openssl || true
+  brew install git gh python jq wget curl unzip openssl || true
 
-  # pinnable clis
-  if $PIN && [[ -n "$KUBECTL_VER" ]]; then
-    sudo curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VER}/bin/darwin/${A}/kubectl" && sudo chmod +x /usr/local/bin/kubectl
-  else brew install kubectl || true; fi
-
-  if $PIN && [[ -n "$HELM_VER" ]]; then
-    curl -fsSL "https://get.helm.sh/helm-${HELM_VER}-darwin-${A}.tar.gz" | tar xz -C /tmp && sudo mv /tmp/darwin-${A}/helm /usr/local/bin/helm
-  else brew install helm || true; fi
-
-  if $PIN && [[ -n "$TERRAFORM_VER" ]]; then
-    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VER}/terraform_${TERRAFORM_VER}_darwin_${A}.zip" -o /tmp/terraform.zip && sudo unzip -o /tmp/terraform.zip -d /usr/local/bin && sudo chmod +x /usr/local/bin/terraform
-  else brew install terraform || true; fi
-
-  if $PIN && [[ -n "$FLUX_VER" ]]; then
-    WITH_FLUX=true
-    curl -fsSL "https://github.com/fluxcd/flux2/releases/download/${FLUX_VER}/flux_${FLUX_VER}_darwin_${A}.tar.gz" | sudo tar xz -C /usr/local/bin flux
-  elif $WITH_FLUX; then
-    brew install fluxcd/tap/flux || true
+  if $WITH_GLAB_CLI; then
+    brew install glab || true
   fi
 
-  if $PIN && [[ -n "$EKSCTL_VER" ]]; then
-    curl -fsSL "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VER}/eksctl_Darwin_${A}.tar.gz" | sudo tar xz -C /usr/local/bin eksctl
-  else brew install eksctl || true; fi
-
-  if ! $MINIMAL; then
+  if $WITH_CLOUD_CLIS || ! $MINIMAL; then
     brew install azure-cli awscli || true
     brew install --cask google-cloud-sdk || true
     gcloud components install gke-gcloud-auth-plugin -q || true
@@ -141,7 +129,11 @@ mac_setup(){
 # ---- Ubuntu 25.04 ----
 ubuntu_setup(){
   sudo apt-get update -y
-  sudo apt-get install -y ca-certificates curl wget unzip jq git gh glab python3 python3-pip gnupg lsb-release software-properties-common
+  sudo apt-get install -y ca-certificates curl wget unzip jq git gh python3 python3-pip gnupg lsb-release software-properties-common
+  
+  if $WITH_GLAB_CLI; then
+    sudo apt-get install -y glab || true
+  fi
   if $WITH_DOCKER; then
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -190,12 +182,12 @@ ubuntu_setup(){
     curl -fsSL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_${A}.tar.gz" | sudo tar xz -C /usr/local/bin eksctl
   fi
 
-  if ! $MINIMAL; then
+  if $WITH_CLOUD_CLIS || ! $MINIMAL; then
     log "Installing cloud CLI tools (Azure, GCP, AWS)"
     # Azure CLI - only add repo if not already present
     if [[ ! -f /etc/apt/sources.list.d/azure-cli.list && ! -f /etc/apt/sources.list.d/azure-cli.sources ]]; then
       curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/microsoft.gpg >/dev/null
-      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ jammy main" | sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
     fi
     # Google Cloud SDK - only add repo if not already present
     if [[ ! -f /etc/apt/sources.list.d/google-cloud-sdk.list && ! -f /etc/apt/sources.list.d/google-cloud-sdk.sources ]]; then
@@ -236,7 +228,11 @@ ubuntu_setup(){
 
 # ---- Fedora (any release) ----
 fedora_setup(){
-  sudo dnf -y install ca-certificates curl wget unzip tar jq git gh glab python3 python3-pip
+  sudo dnf -y install ca-certificates curl wget unzip tar jq git gh python3 python3-pip
+  
+  if $WITH_GLAB_CLI; then
+    sudo dnf -y install glab || true
+  fi
   if $WITH_DOCKER; then
     sudo tee /etc/yum.repos.d/docker-ce.repo >/dev/null <<'EOF'
 [docker-ce-stable]
@@ -311,7 +307,7 @@ EOF
     curl -s https://fluxcd.io/install.sh | sudo bash
   fi
 
-  if ! $MINIMAL; then
+  if $WITH_CLOUD_CLIS || ! $MINIMAL; then
     sudo dnf -y install azure-cli || true
     # gcloud tarball (cross-distro) + GKE plugin
     if [[ "$A" == "amd64" ]]; then GURL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz"; else GURL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-arm64.tar.gz"; fi
@@ -460,7 +456,7 @@ EOF
 }
 
 sso(){
-  $DO_GH && need gh && gh auth login --web || true
+  $DO_GH_AUTH && need gh && gh auth login --web || true
   $DO_GLAB && need glab && glab auth login --hostname gitlab.com -w || true
 }
 
