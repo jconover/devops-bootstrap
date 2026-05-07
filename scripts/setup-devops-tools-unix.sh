@@ -234,7 +234,7 @@ ubuntu_setup(){
   fi
 }
 
-# ---- Fedora 42 ----
+# ---- Fedora (any release) ----
 fedora_setup(){
   sudo dnf -y install ca-certificates curl wget unzip tar jq git gh glab python3 python3-pip
   if $WITH_DOCKER; then
@@ -251,15 +251,11 @@ EOF
     sudo systemctl enable --now docker
   fi
 
-  # HashiCorp + Azure repos
-  sudo tee /etc/yum.repos.d/hashicorp.repo >/dev/null <<'EOF'
-[hashicorp]
-name=HashiCorp Stable - Fedora $releasever - $basearch
-baseurl=https://rpm.releases.hashicorp.com/fedora/$releasever/$basearch/stable
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.releases.hashicorp.com/gpg
-EOF
+  # Remove any stale HashiCorp repo (their RPM repo lags new Fedora releases;
+  # we install Terraform from the official zip below to stay version-agnostic).
+  sudo rm -f /etc/yum.repos.d/hashicorp.repo
+
+  # Azure repo
   sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
   sudo tee /etc/yum.repos.d/azure-cli.repo >/dev/null <<'EOF'
 [azure-cli]
@@ -286,11 +282,18 @@ EOF
     curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
   fi
 
-  # terraform
+  # terraform — install from official zip (avoids HashiCorp RPM repo, which
+  # may not yet support the running Fedora release).
   if $PIN && [[ -n "$TERRAFORM_VER" ]]; then
-    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VER}/terraform_${TERRAFORM_VER}_linux_${A}.zip" -o /tmp/tf.zip && sudo unzip -o /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip
+    TFV="${TERRAFORM_VER#v}"
   else
-    sudo dnf -y install terraform || true
+    TFV="$(curl -fsSL https://checkpoint-api.hashicorp.com/v1/check/terraform | jq -r '.current_version')"
+  fi
+  if [[ -n "$TFV" && "$TFV" != "null" ]]; then
+    curl -fsSL "https://releases.hashicorp.com/terraform/${TFV}/terraform_${TFV}_linux_${A}.zip" -o /tmp/tf.zip \
+      && sudo unzip -o /tmp/tf.zip -d /usr/local/bin && sudo chmod +x /usr/local/bin/terraform && rm /tmp/tf.zip
+  else
+    warn "Could not determine Terraform version; skipping install"
   fi
 
   # eksctl
@@ -517,8 +520,8 @@ case "$OS" in
   Linux)
     source /etc/os-release
     if [[ "$ID" == "ubuntu" && "$VERSION_ID" == "25.04" ]]; then ubuntu_setup
-    elif [[ -f /etc/fedora-release ]] && grep -q "release 42" /etc/fedora-release; then fedora_setup
-    else err "Supported: macOS, Ubuntu 25.04, Fedora 42"; exit 1; fi
+    elif [[ "$ID" == "fedora" ]]; then fedora_setup
+    else err "Supported: macOS, Ubuntu 25.04, Fedora (any release)"; exit 1; fi
     ;;
   *) err "Unsupported OS $OS"; exit 1;;
 esac
